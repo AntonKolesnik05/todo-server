@@ -54,44 +54,35 @@ router.post('/register', async (req, res) => {
 
 
 // ✅ ЛОГІН
-router.post('/register', async (req, res) => {
+router.post('/login', async (req, res) => {
   try {
-    const { firstName, lastName, birthDate, username, password } = req.body;
+    const { username, password } = req.body;
 
-    if (!firstName || !lastName || !birthDate || !username || !password) {
-      return res.status(400).json({ message: 'Будь ласка, заповніть всі поля' });
+    if (!username || !password) {
+      return res.status(400).json({ message: 'Будь ласка, введіть логін і пароль' });
     }
 
-    if (!passwordRegex.test(password)) {
-      return res.status(400).json({
-        message: 'Пароль має містити щонайменше 6 символів, одну велику літеру, одну цифру та один спецсимвол'
-      });
+    const user = await User.findOne({ username });
+    if (!user) {
+      return res.status(400).json({ message: 'Користувача не знайдено' });
     }
 
-    const existingUser = await User.findOne({ username });
-    if (existingUser) {
-      return res.status(400).json({ message: 'Користувач з таким логіном вже існує' });
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(400).json({ message: 'Невірний пароль' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Генеруємо токен
+    const token = jwt.sign(
+      { userId: user._id, username: user.username },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
 
-    const newUser = new User({
-      firstName,
-      lastName,
-      birthDate,
-      username,
-      password: hashedPassword,
-    });
-
-    await newUser.save();
-
-    res.status(201).json({ message: 'Реєстрація успішна' });
+    res.json({ token, message: 'Логін успішний' });
 
   } catch (error) {
-    // Виводимо повний об'єкт помилки
-    console.error('Помилка при реєстрації:', error);
-    console.error('Помилка (JSON):', JSON.stringify(error, Object.getOwnPropertyNames(error)));
-    res.status(500).json({ message: 'Помилка сервера', error: error.message || error });
+    res.status(500).json({ message: 'Помилка сервера', error });
   }
 });
 
